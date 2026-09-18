@@ -38,6 +38,7 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import java.lang.reflect.Type;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -50,7 +51,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "app.trial.introduction-seconds=1",
         "app.trial.argument-seconds=1",
-        "app.trial.debate-seconds=1",
+        "app.trial.debate-interval-seconds=1",
         "app.trial.voting-seconds=1",
         "app.trial.scheduler-enabled=false"
 })
@@ -66,6 +67,7 @@ class TrialEventWebSocketIntegrationTest {
     @Autowired VerdictRepository verdictRepository;
     @Autowired TrialStartService startService;
     @Autowired TrialPhaseService phaseService;
+    @Autowired TrialGenerationService generationService;
     @Autowired @Qualifier("clientInboundChannel") AbstractMessageChannel inboundChannel;
 
     private WebSocketStompClient client;
@@ -130,26 +132,38 @@ class TrialEventWebSocketIntegrationTest {
         assertThat(subscribed.await(5, TimeUnit.SECONDS)).isTrue();
 
         startService.start(trial.getId());
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 3; i++) {
             TrialEntity current = trialRepository.findById(trial.getId()).orElseThrow();
             phaseService.advanceIfExpired(trial.getId(), current.getPhaseEndsAt());
         }
+        for (int turn = 1; turn <= 4; turn++) {
+            int expected = turn;
+            generationService.tick(trial.getId(), OffsetDateTime.now().plusMinutes(5));
+            await(() -> eventRepository.countByTrialIdAndEventTypeIn(
+                    trial.getId(), List.of("A_DEBATE", "B_DEBATE")) == expected);
+        }
+        phaseService.advanceIfExpired(trial.getId(), OffsetDateTime.now().plusMinutes(5));
+        generationService.tick(trial.getId(), trialRepository.findById(trial.getId())
+                .orElseThrow().getPhaseEndsAt());
+        await(() -> verdictRepository.findByTrialId(trial.getId()).isPresent());
+        phaseService.advanceIfExpired(trial.getId(), OffsetDateTime.now().plusMinutes(5));
 
-        List<TrialEventMessage> receivedFirst = receiveEvents(firstEvents, 20);
-        List<TrialEventMessage> receivedSecond = receiveEvents(secondEvents, 20);
+        List<TrialEventMessage> receivedFirst = receiveEvents(firstEvents, 23);
+        List<TrialEventMessage> receivedSecond = receiveEvents(secondEvents, 23);
         receivedFirst.sort((left, right) -> Long.compare(left.sequence(), right.sequence()));
         receivedSecond.sort((left, right) -> Long.compare(left.sequence(), right.sequence()));
         assertThat(receivedSecond).isEqualTo(receivedFirst);
         assertThat(receivedFirst).extracting(TrialEventMessage::sequence)
-                .containsExactly(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L,
-                        11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L);
+                .containsExactlyElementsOf(java.util.stream.LongStream.rangeClosed(1, 23)
+                        .boxed().toList());
         assertThat(receivedFirst).extracting(TrialEventMessage::type).containsExactly(
                 "TRIAL_STARTED", "JUDGE_INTRODUCTION", "JUDGE_PHASE_NOTICE", "A_ARGUMENT",
                 "JUDGE_PHASE_NOTICE", "B_ARGUMENT", "JUDGE_PHASE_NOTICE", "DEBATE_STARTED",
-                "A_DEBATE", "B_DEBATE", "A_DEBATE", "B_DEBATE", "A_DEBATE", "B_DEBATE",
-                "JUDGE_PHASE_NOTICE", "VOTING_STARTED", "JUDGE_PHASE_NOTICE", "VERDICT_ANNOUNCED",
-                "JUDGE_PHASE_NOTICE", "TRIAL_ENDED");
-        assertThat(eventRepository.findByTrialIdOrderBySequenceNoAsc(trial.getId())).hasSize(20);
+                "GENERATION_STARTED", "A_DEBATE", "GENERATION_STARTED", "B_DEBATE",
+                "GENERATION_STARTED", "B_DEBATE", "GENERATION_STARTED", "A_DEBATE",
+                "JUDGE_PHASE_NOTICE", "VOTING_STARTED", "GENERATION_STARTED",
+                "JUDGE_PHASE_NOTICE", "VERDICT_ANNOUNCED", "JUDGE_PHASE_NOTICE", "TRIAL_ENDED");
+        assertThat(eventRepository.findByTrialIdOrderBySequenceNoAsc(trial.getId())).hasSize(23);
     }
 
     private void readyParty(TrialSide side, String argument) {
@@ -190,5 +204,13 @@ class TrialEventWebSocketIntegrationTest {
             events.add(event);
         }
         return events;
+    }
+
+    private void await(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            if (condition.getAsBoolean()) { return; }
+            Thread.sleep(20);
+        }
+        assertThat(condition.getAsBoolean()).isTrue();
     }
 }

@@ -14,6 +14,8 @@ import com.skala.team6.webmini.database.repository.ChatMessageRepository;
 import com.skala.team6.webmini.database.repository.TrialEventRepository;
 import com.skala.team6.webmini.database.repository.VerdictRepository;
 import com.skala.team6.webmini.database.repository.VoteRepository;
+import com.skala.team6.webmini.trial.TrialGenerationService;
+import com.skala.team6.webmini.trial.TrialPreparationAiService;
 
 @SpringBootTest(properties = "spring.autoconfigure.exclude="
         + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
@@ -41,6 +43,10 @@ class WebMiniBackendApplicationTests {
     private VerdictRepository verdictRepository;
     @MockitoBean
     private VoteRepository voteRepository;
+    @MockitoBean
+    private TrialGenerationService trialGenerationService;
+    @MockitoBean
+    private TrialPreparationAiService trialPreparationAiService;
 
     @Test
     void contextLoads() {

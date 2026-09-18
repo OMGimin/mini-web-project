@@ -241,6 +241,13 @@ class MockAiControllerTest {
         }
 
         @Override
+        public LawyerDebateResponse createDebateTurn(
+                AiRequestContext context, LawyerDebateRequest request
+        ) {
+            return new LawyerDebateResponse("공방", "1.0", request.promptVersion());
+        }
+
+        @Override
         public JudgeVerdictResponse createVerdict(
                 AiRequestContext context,
                 JudgeVerdictRequest request

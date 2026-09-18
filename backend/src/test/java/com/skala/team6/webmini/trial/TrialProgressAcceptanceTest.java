@@ -15,6 +15,7 @@ import com.skala.team6.webmini.database.repository.TrialRepository;
 import com.skala.team6.webmini.database.repository.TrialStatementRepository;
 import com.skala.team6.webmini.database.repository.UserRepository;
 import com.skala.team6.webmini.database.repository.VerdictRepository;
+import com.skala.team6.webmini.common.model.TrialSpeaker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -26,6 +27,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +51,7 @@ class TrialProgressAcceptanceTest {
     @Autowired TrialStatementRepository trialStatementRepository;
     @Autowired VerdictRepository verdictRepository;
     @Autowired TrialPhaseService trialPhaseService;
+    @Autowired TrialGenerationService generationService;
     @MockitoBean SimpMessagingTemplate messagingTemplate;
 
     @AfterEach
@@ -89,7 +92,7 @@ class TrialProgressAcceptanceTest {
         assertThat(started.getPhaseEndsAt()).isNotNull();
         assertThat(started.getScheduledEndAt()).isNotNull();
         assertThat(Duration.between(started.getPhaseStartedAt(), started.getScheduledEndAt()))
-                .isEqualTo(Duration.ofSeconds(122));
+                .isEqualTo(Duration.ofSeconds(74));
         assertThat(trialEventRepository.findByTrialIdOrderBySequenceNoAsc(trial.getId()))
                 .extracting("sequenceNo", "eventType")
                 .containsExactly(
@@ -101,7 +104,7 @@ class TrialProgressAcceptanceTest {
     }
 
     @Test
-    void advancesAllPhasesAndPersistsArgumentsVerdictAndEndEvents() {
+    void advancesAllPhasesAndPersistsArgumentsVerdictAndEndEvents() throws Exception {
         UserEntity user = userRepository.save(new UserEntity(UUID.randomUUID().toString(), "작성자"));
         PostEntity post = postRepository.save(new PostEntity(
                 user, "재판 제목", "재판 내용", RelationshipType.COUPLE, true));
@@ -111,42 +114,52 @@ class TrialProgressAcceptanceTest {
 
         // 시작 이후 각 phaseEndsAt을 기준으로 스케줄러와 동일한 전이를 직접 실행한다.
         startService.start(trial.getId());
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 3; i++) {
             TrialEntity current = trialRepository.findById(trial.getId()).orElseThrow();
             trialPhaseService.advanceIfExpired(trial.getId(), current.getPhaseEndsAt());
         }
+
+        // 실제 생성이 저장되기 전에는 시간이 지나도 투표로 넘어갈 수 없다.
+        trialPhaseService.advanceIfExpired(trial.getId(), OffsetDateTime.now().plusMinutes(10));
+        assertThat(trialRepository.findById(trial.getId()).orElseThrow().getStatus())
+                .isEqualTo(TrialStatus.DEBATE);
+        for (int turn = 1; turn <= 4; turn++) {
+            int expected = turn;
+            generationService.tick(trial.getId(), OffsetDateTime.now().plusMinutes(10));
+            await(() -> trialEventRepository.countByTrialIdAndEventTypeIn(
+                    trial.getId(), java.util.List.of("A_DEBATE", "B_DEBATE")) == expected);
+        }
+        trialPhaseService.advanceIfExpired(trial.getId(), OffsetDateTime.now().plusMinutes(10));
+        assertThat(trialRepository.findById(trial.getId()).orElseThrow().getStatus())
+                .isEqualTo(TrialStatus.VOTING);
+        generationService.tick(trial.getId(), trialRepository.findById(trial.getId())
+                .orElseThrow().getPhaseEndsAt());
+        await(() -> verdictRepository.findByTrialId(trial.getId()).isPresent());
+        trialPhaseService.advanceIfExpired(trial.getId(), OffsetDateTime.now().plusMinutes(10));
 
         TrialEntity ended = trialRepository.findById(trial.getId()).orElseThrow();
         assertThat(ended.getStatus()).isEqualTo(TrialStatus.ENDED);
         assertThat(verdictRepository.findByTrialId(trial.getId())).isPresent();
         var events = trialEventRepository.findByTrialIdOrderBySequenceNoAsc(trial.getId());
-        assertThat(events).extracting("sequenceNo", "eventType")
-                .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(1L, "TRIAL_STARTED"),
-                        org.assertj.core.groups.Tuple.tuple(2L, "JUDGE_INTRODUCTION"),
-                        org.assertj.core.groups.Tuple.tuple(3L, "JUDGE_PHASE_NOTICE"),
-                        org.assertj.core.groups.Tuple.tuple(4L, "A_ARGUMENT"),
-                        org.assertj.core.groups.Tuple.tuple(5L, "JUDGE_PHASE_NOTICE"),
-                        org.assertj.core.groups.Tuple.tuple(6L, "B_ARGUMENT"),
-                        org.assertj.core.groups.Tuple.tuple(7L, "JUDGE_PHASE_NOTICE"),
-                        org.assertj.core.groups.Tuple.tuple(8L, "DEBATE_STARTED"),
-                        org.assertj.core.groups.Tuple.tuple(9L, "A_DEBATE"),
-                        org.assertj.core.groups.Tuple.tuple(10L, "B_DEBATE"),
-                        org.assertj.core.groups.Tuple.tuple(11L, "A_DEBATE"),
-                        org.assertj.core.groups.Tuple.tuple(12L, "B_DEBATE"),
-                        org.assertj.core.groups.Tuple.tuple(13L, "A_DEBATE"),
-                        org.assertj.core.groups.Tuple.tuple(14L, "B_DEBATE"),
-                        org.assertj.core.groups.Tuple.tuple(15L, "JUDGE_PHASE_NOTICE"),
-                        org.assertj.core.groups.Tuple.tuple(16L, "VOTING_STARTED"),
-                        org.assertj.core.groups.Tuple.tuple(17L, "JUDGE_PHASE_NOTICE"),
-                        org.assertj.core.groups.Tuple.tuple(18L, "VERDICT_ANNOUNCED"),
-                        org.assertj.core.groups.Tuple.tuple(19L, "JUDGE_PHASE_NOTICE"),
-                        org.assertj.core.groups.Tuple.tuple(20L, "TRIAL_ENDED"));
+        assertThat(events).extracting("eventType")
+                .contains("DEBATE_STARTED", "VOTING_STARTED", "VERDICT_ANNOUNCED", "TRIAL_ENDED")
+                .containsSequence("GENERATION_STARTED", "A_DEBATE")
+                .containsSequence("GENERATION_STARTED", "B_DEBATE");
         assertThat(events).filteredOn(event -> event.getEventType().endsWith("_DEBATE"))
-                .allSatisfy(event -> assertThat(event.getContent()).isNotBlank());
+                .extracting("speaker")
+                .containsExactly(TrialSpeaker.A_LAWYER, TrialSpeaker.B_LAWYER,
+                        TrialSpeaker.B_LAWYER, TrialSpeaker.A_LAWYER);
     }
 
     @Autowired TrialStartService startService;
+
+    private void await(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            if (condition.getAsBoolean()) { return; }
+            Thread.sleep(20);
+        }
+        assertThat(condition.getAsBoolean()).isTrue();
+    }
 
     private TrialPartyEntity readyParty(TrialEntity trial, TrialSide side,
                                         String displayName, String argument) {
