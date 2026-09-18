@@ -38,6 +38,11 @@ const actionLabel = computed(() => {
   if (props.party.pending) return '처리 중...'
   return props.party.draftGenerated ? '변론문 생성 완료' : '진술서 작성 완료'
 })
+const providerLabel = computed(() => {
+  if (props.party.aiProvider === 'mock') return '모의 응답'
+  if (props.party.aiProvider === 'langchain') return 'LangChain 연결 모드'
+  return 'AI 변호사'
+})
 
 function updateParty(patch) {
   emit('update:party', { ...props.party, ...patch })
@@ -179,7 +184,7 @@ function advancePreparation() {
           AI 변호사와 대화를 마친 뒤<br />‘진술서 작성 완료’를 눌러주세요.
         </div>
       </div>
-      <p class="mt-3 text-center text-xs text-muted-foreground">대화 완료 후 Mock AI가 사건 개요와 핵심 진술을 요약합니다.</p>
+      <p class="mt-3 text-center text-xs text-muted-foreground">대화 완료 후 {{ providerLabel }}가 사건 개요와 핵심 진술을 요약합니다.</p>
     </section>
 
     <div class="flex justify-between border-t border-border pt-4 lg:col-span-2">

@@ -118,6 +118,7 @@ const parties = reactive({
     caseOverview: "",
     keyPoints: [],
     argumentText: "",
+    aiProvider: null,
     confirmed: false,
     confirmedAt: null,
     statementSaved: false,
@@ -165,6 +166,7 @@ const parties = reactive({
     caseOverview: "",
     keyPoints: [],
     argumentText: "",
+    aiProvider: null,
     confirmed: false,
     confirmedAt: null,
     statementSaved: false,
@@ -241,9 +243,12 @@ async function prepareParty(statement) {
       caseOverview: draft.factSummary,
       keyPoints: Object.values(statement),
       argumentText: draft.argumentText,
+      aiProvider: draft.aiProvider ?? null,
     });
   } catch (error) {
-    party.error = error?.message || "진술을 저장하지 못했습니다.";
+    party.error = error?.code === "REQUEST_TIMEOUT"
+      ? "AI 변론문을 준비하는 데 시간이 더 필요합니다. 잠시 후 다시 시도해 주세요."
+      : error?.message || "진술을 저장하지 못했습니다.";
   } finally {
     party.pending = false;
   }
@@ -369,6 +374,7 @@ async function startDemo() {
       caseOverview: draftA.factSummary,
       keyPoints: Object.values(statementA),
       argumentText: draftA.argumentText,
+      aiProvider: draftA.aiProvider ?? null,
     });
     parties.A.pending = false;
 
@@ -406,6 +412,7 @@ async function startDemo() {
       caseOverview: draftB.factSummary,
       keyPoints: Object.values(statementB),
       argumentText: draftB.argumentText,
+      aiProvider: draftB.aiProvider ?? null,
     });
     parties.B.pending = false;
 

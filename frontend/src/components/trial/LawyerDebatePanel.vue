@@ -5,7 +5,15 @@ import { Scale, Sparkles } from '@lucide/vue'
 const props = defineProps({
   events: { type: Array, default: () => [] },
   remainingTime: { type: String, required: true },
+  waitingLabel: { type: String, default: '' },
+  generationStatus: { type: String, default: 'IDLE' },
+  generationLabel: { type: String, default: '' },
+  generationError: { type: String, default: '' },
+  retryable: { type: Boolean, default: false },
+  retryPending: { type: Boolean, default: false },
 })
+
+defineEmits(['retry'])
 
 const debateList = ref(null)
 const shouldFollowLatest = ref(true)
@@ -54,8 +62,21 @@ function updateFollowLatest() {
         <h2 id="debate-title"><Scale :size="20" /> AI 재판 진행 내역</h2>
         <p>사건 소개부터 양측 주장과 상호 변론까지 확인할 수 있습니다.</p>
       </div>
-      <span class="timer-badge">남은 시간 {{ remainingTime }}</span>
+      <span class="timer-badge">{{ waitingLabel || `남은 시간 ${remainingTime}` }}</span>
     </header>
+
+    <div class="generation-status">
+      <div v-if="generationStatus === 'GENERATING'" class="generation-notice" role="status">
+        <Sparkles :size="17" /> {{ generationLabel || 'AI 변론을 준비하고 있습니다.' }}
+      </div>
+
+      <div v-else-if="generationStatus === 'FAILED'" class="generation-error" role="alert">
+        <p>{{ generationError || 'AI 발언을 생성하지 못했습니다.' }}</p>
+        <button v-if="retryable" type="button" :disabled="retryPending" @click="$emit('retry')">
+          {{ retryPending ? '재시도 요청 중...' : 'AI 생성 다시 시도' }}
+        </button>
+      </div>
+    </div>
 
     <div
       ref="debateList"
@@ -92,7 +113,7 @@ function updateFollowLatest() {
   height: 456px;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   border: 1px solid var(--ds-color-outline-variant);
   border-radius: var(--ds-radius-md);
   background: white;
@@ -252,6 +273,55 @@ h2 {
   gap: 8px;
   color: var(--ds-color-on-surface-variant);
   font-size: 1rem;
+}
+
+.generation-notice,
+.generation-error {
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #c9d7ea;
+  border-radius: var(--ds-radius-default);
+  background: #eff5ff;
+  color: var(--ds-color-justice-blue);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.generation-status:has(.generation-notice),
+.generation-status:has(.generation-error) {
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--ds-color-outline-variant);
+  background: white;
+}
+
+.generation-error {
+  display: block;
+  border-color: var(--ds-color-error);
+  background: var(--ds-color-error-container);
+  color: var(--ds-color-on-error-container);
+}
+
+.generation-error p {
+  margin: 0;
+}
+
+.generation-error button {
+  margin-top: 10px;
+  padding: 8px 11px;
+  border: 1px solid currentColor;
+  border-radius: var(--ds-radius-default);
+  background: white;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.generation-error button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 @media (max-width: 680px) {

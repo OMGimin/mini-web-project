@@ -1,9 +1,10 @@
 <script setup>
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Clock3, Eye, UsersRound } from "@lucide/vue";
 import { CONNECTION_STATUS } from "@/consts/liveTrialUiStatus.js";
 import { TRIAL_STATUS } from "@/consts/trialStatus.js";
+import { retryAiGeneration } from "@/apis/trialApi.js";
 import { useLiveTrialSession } from "@/composables/useLiveTrialSession.js";
 import { useTrialCountdown } from "@/composables/useTrialCountdown.js";
 import TrialChatPanel from "@/components/chat/TrialChatPanel.vue";
@@ -21,6 +22,8 @@ const route = useRoute();
 const router = useRouter();
 const trialId = computed(() => route.params.trialId);
 const session = useLiveTrialSession(trialId);
+const retryPending = ref(false);
+const retryError = ref("");
 
 const trialTitle = computed(
   () => session.detail.value?.title ?? "재판 정보를 불러오는 중입니다",
@@ -66,6 +69,9 @@ const audienceCount = computed(() => {
   }
 });
 const activeSpeaker = computed(() => {
+  if (session.currentSnapshot.value?.generationStatus === "GENERATING") {
+    return normalizeSpeakerKey(session.currentSnapshot.value?.nextSpeaker);
+  }
   if (
     session.status.value === TRIAL_STATUS.INTRODUCTION ||
     session.status.value === TRIAL_STATUS.VERDICT
@@ -80,6 +86,25 @@ const activeSpeaker = computed(() => {
     return lastSpeaker;
   }
   return "";
+});
+const generation = computed(() => session.currentSnapshot.value ?? {});
+const isGenerating = computed(() => generation.value.generationStatus === "GENERATING");
+const generationFailed = computed(() => generation.value.generationStatus === "FAILED");
+const generationLabel = computed(() => {
+  if (generation.value.generationStage === "VERDICT") return "AI 판결 준비 중";
+  return normalizeSpeakerKey(generation.value.nextSpeaker) === "B_LAWYER"
+    ? "B측 반박 준비중"
+    : "A측 반박 준비중";
+});
+const generationTimerLabel = computed(() => {
+  if (isGenerating.value) return '생성 완료 대기';
+  if (generationFailed.value) return '재시도 대기';
+  return '';
+});
+const providerLabel = computed(() => {
+  if (generation.value.aiProvider === "mock") return "모의 응답";
+  if (generation.value.aiProvider === "langchain") return "LangChain 연결 모드";
+  return "AI 진행";
 });
 const phaseLabel = computed(() => getTrialPhaseLabel(session.status.value));
 const trialConversationEvents = computed(() =>
@@ -120,6 +145,8 @@ watch(
   ([status, restoring]) => {
     if (restoring) return;
 
+    if (isGenerating.value || generationFailed.value) return;
+
     if (status === TRIAL_STATUS.ENDED) {
       router.replace({
         name: "trial-result",
@@ -137,6 +164,22 @@ watch(
   },
   { immediate: true },
 );
+
+async function retryGeneration() {
+  if (!generation.value.retryable || retryPending.value) return;
+  retryPending.value = true;
+  retryError.value = "";
+  try {
+    const nextSnapshot = await retryAiGeneration(trialId.value);
+    session.snapshot.value = nextSnapshot;
+  } catch (error) {
+    retryError.value = error?.status === 403
+      ? "재판을 만든 사용자만 AI 생성을 다시 시도할 수 있습니다."
+      : error?.message || "AI 생성 재시도를 요청하지 못했습니다.";
+  } finally {
+    retryPending.value = false;
+  }
+}
 </script>
 
 <template>
@@ -154,6 +197,7 @@ watch(
           "실시간 요청을 처리하지 못했습니다."
         }}
       </p>
+      <p v-if="retryError" class="realtime-error" role="alert">{{ retryError }}</p>
 
       <section class="trial-summary" aria-labelledby="trial-title">
         <div class="summary-copy">
@@ -161,6 +205,7 @@ watch(
             <span class="live-badge" :class="{ ended: trialEnded }">
               <i aria-hidden="true"></i>{{ trialEnded ? "종료" : "실시간" }}
             </span>
+            <span class="provider-badge">{{ providerLabel }}</span>
             <span class="view-badge"
               ><Eye :size="14" />{{ liveTrialMock.viewCount }}</span
             >
@@ -173,7 +218,7 @@ watch(
             <Clock3 :size="21" />
             <span>
               <small>{{ phaseLabel }}</small>
-              <strong>{{ formattedRemainingTime }}</strong>
+              <strong>{{ generationTimerLabel || formattedRemainingTime }}</strong>
             </span>
           </div>
           <div class="stat-card audience-card">
@@ -191,10 +236,18 @@ watch(
           <TrialStage
             :participants="trialParticipants"
             :active-speaker="activeSpeaker"
+            :speaking-label="isGenerating ? generationLabel : ''"
           />
           <LawyerDebatePanel
             :events="trialConversationEvents"
             :remaining-time="formattedRemainingTime"
+            :waiting-label="generationTimerLabel"
+            :generation-label="generationLabel"
+            :generation-status="generation.generationStatus"
+            :generation-error="generation.generationError"
+            :retryable="Boolean(generation.retryable)"
+            :retry-pending="retryPending"
+            @retry="retryGeneration"
           />
         </div>
 
@@ -252,7 +305,8 @@ watch(
 }
 
 .live-badge,
-.view-badge {
+.view-badge,
+.provider-badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -283,6 +337,16 @@ watch(
 .view-badge {
   background: #edf2f9;
   color: var(--ds-color-on-surface-variant);
+}
+
+.provider-badge {
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: var(--ds-radius-full);
+  background: #edf2f9;
+  color: var(--ds-color-on-surface-variant);
+  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 h1 {

@@ -22,11 +22,16 @@ const { formattedRemainingTime } = useTrialCountdown(trialEndsAt)
 const trialEnded = computed(
   () => session.status.value === TRIAL_STATUS.ENDED || session.currentSnapshot.value?.ended,
 )
+const generationStatus = computed(() => session.currentSnapshot.value?.generationStatus)
+const generationInProgress = computed(() => generationStatus.value === 'GENERATING')
+const generationFailed = computed(() => generationStatus.value === 'FAILED')
 const interactionsDisabled = computed(
-  () => session.connection.value.status !== CONNECTION_STATUS.CONNECTED || trialEnded.value,
+  () => session.connection.value.status !== CONNECTION_STATUS.CONNECTED || trialEnded.value || generationInProgress.value || generationFailed.value,
 )
 const interactionDisabledMessage = computed(() => {
   if (trialEnded.value) return '재판이 종료되었습니다.'
+  if (generationInProgress.value) return 'AI 변론이 생성 중입니다. 완료된 뒤 투표가 시작됩니다.'
+  if (generationFailed.value) return 'AI 생성 문제가 해결된 뒤 투표를 진행할 수 있습니다.'
   if (session.connection.value.status !== CONNECTION_STATUS.CONNECTED) {
     return '재판 연결을 복구한 뒤 다시 시도해 주세요.'
   }
@@ -82,9 +87,14 @@ const voteDisabledMessage = computed(() => {
 })
 
 watch(
-  [() => session.status.value, () => session.restoring.value],
-  ([status, restoring]) => {
+  [() => session.status.value, () => session.restoring.value, generationStatus],
+  ([status, restoring, generation]) => {
     if (restoring) return
+
+    if (generation === 'GENERATING' || generation === 'FAILED') {
+      router.replace({ name: 'live-trial', params: { trialId: route.params.trialId } })
+      return
+    }
 
     if (status === TRIAL_STATUS.ENDED) {
       router.replace({ name: 'trial-result', params: { trialId: route.params.trialId } })

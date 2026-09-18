@@ -7,6 +7,7 @@ defineProps({
     required: true,
   },
   activeSpeaker: { type: String, default: '' },
+  speakingLabel: { type: String, default: '' },
 })
 </script>
 
@@ -23,7 +24,7 @@ defineProps({
       ]"
     >
       <div v-if="activeSpeaker === participant.speakerKey" class="speaking-bubble" role="status">
-        <MessageCircle :size="15" /> 발언 중
+        <MessageCircle :size="15" /> {{ speakingLabel || '발언 중' }}
       </div>
       <div
         class="portrait"
