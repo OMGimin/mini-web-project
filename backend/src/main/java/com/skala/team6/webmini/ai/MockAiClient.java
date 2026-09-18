@@ -3,11 +3,13 @@ package com.skala.team6.webmini.ai;
 import com.skala.team6.webmini.common.config.AppAiProperties;
 import com.skala.team6.webmini.common.model.TrialSide;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
+@ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "mock", matchIfMissing = true)
 public class MockAiClient implements AiClient {
 
     private final AppAiProperties appAiProperties;
@@ -74,6 +76,18 @@ public class MockAiClient implements AiClient {
                         .formatted(sideLabel, statement.desiredResolution(), basis),
                 "1.0"
         );
+    }
+
+    @Override
+    public LawyerDebateResponse createDebateTurn(AiRequestContext context, LawyerDebateRequest request) {
+        String previous = request.previousTurns().isEmpty()
+                ? "양측의 최종 변론을 검토했습니다."
+                : "직전 반론의 핵심도 검토했습니다.";
+        return new LawyerDebateResponse(
+                "%s측의 %d번째 상호 변론입니다. %s %s측의 입장은 %s"
+                        .formatted(request.side(), request.turn(), previous, request.side(),
+                                request.arguments().get(request.side())),
+                "1.0", request.promptVersion());
     }
 
     @Override

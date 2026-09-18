@@ -22,6 +22,13 @@ public class JudgeAiService {
 
     public Verdict createVerdict(Long trialId, String postSummary,
                                  Map<TrialSide, String> arguments) {
+        return createVerdict(trialId, postSummary, arguments, Map.of(), List.of());
+    }
+
+    public Verdict createVerdict(Long trialId, String postSummary,
+                                 Map<TrialSide, String> arguments,
+                                 Map<TrialSide, LawyerAiService.Statement> statements,
+                                 List<LawyerAiService.DebateTurn> debateTurns) {
         if (arguments == null || arguments.size() != 2
                 || !arguments.keySet().containsAll(List.of(TrialSide.A, TrialSide.B))
                 || arguments.values().stream().anyMatch(value -> value == null || value.isBlank())) {
@@ -29,8 +36,15 @@ public class JudgeAiService {
         }
         AiRequestContext context = new AiRequestContext(UUID.randomUUID().toString(), properties.promptVersion());
         JudgeVerdictRequest request = new JudgeVerdictRequest(
-                trialId, postSummary, arguments, properties.promptVersion());
-        for (int attempt = 0; attempt < 2; attempt++) {
+                trialId, postSummary, arguments,
+                statements.entrySet().stream().collect(java.util.stream.Collectors.toMap(
+                        Map.Entry::getKey, entry -> new StatementPayload(
+                                entry.getValue().incidentTime(), entry.getValue().situation(),
+                                entry.getValue().counterpartAction(), entry.getValue().ownAction(),
+                                entry.getValue().afterConversation(), entry.getValue().desiredResolution()))),
+                debateTurns.stream().map(item -> new DebateTurnItem(item.side(), item.content())).toList(),
+                properties.promptVersion());
+        for (int attempt = 0; attempt < ("mock".equals(properties.provider()) ? 2 : 1); attempt++) {
             try {
                 JudgeVerdictResponse response = aiClient.createVerdict(context, request);
                 if (isValid(response)) {
@@ -43,13 +57,13 @@ public class JudgeAiService {
                 // A Mock adapter failure is retried once before exposing a stable API error.
             }
         }
-        throw new ApiException(ErrorCode.MOCK_AI_RESPONSE_INVALID);
+        throw new ApiException("mock".equals(properties.provider())
+                ? ErrorCode.MOCK_AI_RESPONSE_INVALID : ErrorCode.AI_RESPONSE_INVALID);
     }
 
     private boolean isValid(JudgeVerdictResponse response) {
         return response != null
                 && "1.0".equals(response.schemaVersion())
-                && response.winnerSide() != null
                 && response.aFaultRatio() >= 0 && response.aFaultRatio() <= 100
                 && response.bFaultRatio() >= 0 && response.bFaultRatio() <= 100
                 && response.aFaultRatio() + response.bFaultRatio() == 100

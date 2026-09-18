@@ -6,5 +6,7 @@ public interface AiClient {
 
     LawyerArgumentResponse createArgumentDraft(AiRequestContext context, LawyerArgumentRequest request);
 
+    LawyerDebateResponse createDebateTurn(AiRequestContext context, LawyerDebateRequest request);
+
     JudgeVerdictResponse createVerdict(AiRequestContext context, JudgeVerdictRequest request);
 }

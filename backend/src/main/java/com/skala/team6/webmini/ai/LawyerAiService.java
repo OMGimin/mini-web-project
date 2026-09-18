@@ -81,6 +81,26 @@ public class LawyerAiService {
         );
     }
 
+    public String createDebateTurn(long trialId, int turn, int totalTurns, TrialSide side,
+                                   String postContent, java.util.Map<TrialSide, Statement> statements,
+                                   java.util.Map<TrialSide, String> arguments,
+                                   List<DebateTurn> previousTurns) {
+        String promptVersion = "lawyer-debate-v1";
+        LawyerDebateRequest request = new LawyerDebateRequest(trialId, turn, totalTurns, side,
+                postContent, statements.entrySet().stream().collect(
+                        java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey,
+                                entry -> toStatementPayload(entry.getValue()))),
+                arguments, previousTurns.stream()
+                        .map(item -> new DebateTurnItem(item.side(), item.content())).toList(),
+                promptVersion);
+        LawyerDebateResponse response = aiClient.createDebateTurn(context(promptVersion), request);
+        if (response == null || !SCHEMA_VERSION.equals(response.schemaVersion())
+                || !promptVersion.equals(response.promptVersion()) || !hasText(response.content())) {
+            throw new ApiException(ErrorCode.AI_RESPONSE_INVALID);
+        }
+        return response.content().trim();
+    }
+
     private StatementPayload toStatementPayload(Statement statement) {
         return new StatementPayload(
                 statement.incidentTime(),
@@ -93,7 +113,8 @@ public class LawyerAiService {
     }
 
     private <T> T invoke(Supplier<T> invocation, Predicate<T> validator) {
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        int maxAttempts = aiClient instanceof LangChainAiClient ? 1 : MAX_ATTEMPTS;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 T response = invocation.get();
                 if (validator.test(response)) {
@@ -101,13 +122,14 @@ public class LawyerAiService {
                 }
             } catch (RuntimeException exception) {
                 LOGGER.warn(
-                        "Mock AI 호출 실패: attempt={}, errorType={}",
+                    "AI 호출 실패: attempt={}, errorType={}",
                         attempt,
                         exception.getClass().getSimpleName()
                 );
             }
         }
-        throw new ApiException(ErrorCode.MOCK_AI_RESPONSE_INVALID);
+        throw new ApiException(aiClient instanceof LangChainAiClient
+                ? ErrorCode.AI_RESPONSE_INVALID : ErrorCode.MOCK_AI_RESPONSE_INVALID);
     }
 
     private boolean isValidQuestionsResponse(LawyerQuestionsResponse response) {
@@ -177,5 +199,8 @@ public class LawyerAiService {
     }
 
     public record ArgumentDraft(String factSummary, String argumentText) {
+    }
+
+    public record DebateTurn(TrialSide side, String content) {
     }
 }

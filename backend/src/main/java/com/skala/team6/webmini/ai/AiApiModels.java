@@ -6,7 +6,6 @@ import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -44,7 +43,7 @@ record LawyerArgumentRequest(
         @NotNull
         @Valid
         StatementPayload statement,
-        @NotEmpty
+        @NotNull
         @Valid
         List<GuideAnswerItem> guideAnswers
 ) {
@@ -70,6 +69,8 @@ record JudgeVerdictRequest(
         @NotNull
         @Size(min = 2, max = 2)
         Map<TrialSide, String> arguments,
+        Map<TrialSide, StatementPayload> statements,
+        List<DebateTurnItem> debateTurns,
         @Schema(example = "judge-v1")
         @NotBlank
         String promptVersion
@@ -77,7 +78,6 @@ record JudgeVerdictRequest(
 }
 
 record JudgeVerdictResponse(
-        @NotNull
         TrialSide winnerSide,
         @Schema(example = "60")
         int aFaultRatio,
@@ -93,6 +93,18 @@ record JudgeVerdictResponse(
         @Schema(example = "judge-v1")
         String promptVersion
 ) {
+}
+
+record LawyerDebateRequest(Long trialId, int turn, int totalTurns, TrialSide side,
+                           String postContent, Map<TrialSide, StatementPayload> statements,
+                           Map<TrialSide, String> arguments,
+                           List<DebateTurnItem> previousTurns, String promptVersion) {
+}
+
+record LawyerDebateResponse(String content, String schemaVersion, String promptVersion) {
+}
+
+record DebateTurnItem(TrialSide side, String content) {
 }
 
 record GuideQuestionItem(

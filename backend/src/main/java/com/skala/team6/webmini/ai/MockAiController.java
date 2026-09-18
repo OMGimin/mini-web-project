@@ -10,11 +10,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.UUID;
 
 @Tag(name = "Mock AI", description = "Backend 내부 Mock AI Adapter 확인용 컨트롤러")
 @RestController
+@ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "mock", matchIfMissing = true)
 @RequestMapping("/api/v1/mock-ai")
 public class MockAiController {
 
