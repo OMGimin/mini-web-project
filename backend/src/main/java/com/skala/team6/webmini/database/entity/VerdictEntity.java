@@ -29,7 +29,7 @@ public class VerdictEntity {
     private TrialEntity trial;
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "winner_side", nullable = false, columnDefinition = "trial_side")
+    @Column(name = "winner_side", columnDefinition = "trial_side")
     private TrialSide winnerSide;
     @Column(name = "a_fault_ratio", nullable = false)
     private int aFaultRatio;

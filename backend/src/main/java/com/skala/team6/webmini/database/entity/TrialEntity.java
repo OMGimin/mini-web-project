@@ -51,6 +51,16 @@ public class TrialEntity {
     private OffsetDateTime scheduledEndAt;
     @Column(name = "completed_at")
     private OffsetDateTime completedAt;
+    @Column(name = "generation_status", nullable = false, length = 20)
+    private String generationStatus = "IDLE";
+    @Column(name = "generation_stage", length = 20)
+    private String generationStage;
+    @Column(name = "generation_turn")
+    private Integer generationTurn;
+    @Column(name = "generation_request_id", length = 36)
+    private String generationRequestId;
+    @Column(name = "generation_started_at")
+    private OffsetDateTime generationStartedAt;
     @CreationTimestamp
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
@@ -108,6 +118,34 @@ public class TrialEntity {
         return completedAt;
     }
 
+    public String getGenerationStatus() { return generationStatus; }
+    public String getGenerationStage() { return generationStage; }
+    public Integer getGenerationTurn() { return generationTurn; }
+    public String getGenerationRequestId() { return generationRequestId; }
+    public OffsetDateTime getGenerationStartedAt() { return generationStartedAt; }
+
+    public void beginGeneration(String stage, Integer turn, String requestId, OffsetDateTime now) {
+        generationStatus = "GENERATING";
+        generationStage = stage;
+        generationTurn = turn;
+        generationRequestId = requestId;
+        generationStartedAt = now;
+    }
+
+    public void finishGeneration() {
+        generationStatus = "IDLE";
+        generationStage = null;
+        generationTurn = null;
+        generationRequestId = null;
+        generationStartedAt = null;
+    }
+
+    public void failGeneration() {
+        generationStatus = "FAILED";
+        generationRequestId = null;
+        generationStartedAt = null;
+    }
+
     public void startPhase(TrialStatus status, OffsetDateTime startsAt, OffsetDateTime endsAt) {
         if (this.startedAt == null) {
             this.startedAt = startsAt;
@@ -126,5 +164,9 @@ public class TrialEntity {
 
     public void scheduleEnd(OffsetDateTime scheduledEndAt) {
         this.scheduledEndAt = scheduledEndAt;
+    }
+
+    public void extendPhaseTo(OffsetDateTime endsAt) {
+        this.phaseEndsAt = endsAt;
     }
 }
