@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { getTrial } from '@/apis/trialApi.js'
 import { useLiveTrialRealtime } from '@/composables/useLiveTrialRealtime.js'
 import { CONNECTION_STATUS } from '@/consts/liveTrialUiStatus.js'
@@ -26,6 +26,7 @@ export function useLiveTrialSession(trialId, options = {}) {
   const hasRecovered = ref(false)
   const demoUserId = getDemoUserId()
   let pendingChatContent = null
+  let generationFallbackTimer = null
 
   function appendEvent(event) {
     events.value = mergeTrialEvents(events.value, [event])
@@ -138,6 +139,56 @@ export function useLiveTrialSession(trialId, options = {}) {
 
     return realtime.connection.value
   })
+
+  async function refreshGenerationFallback() {
+    if (connection.value.status === CONNECTION_STATUS.CONNECTED) return
+    if (currentSnapshot.value?.generationStatus !== 'GENERATING') return
+
+    try {
+      await recoverLiveTrial({
+        trialId: unrefTrialId(),
+        afterEventSequence: getLastContiguousEventSequence(events.value),
+        onSnapshot: (nextSnapshot) => {
+          snapshot.value = nextSnapshot
+        },
+        onEvent: appendEvent,
+      })
+    } catch (error) {
+      options.onError?.(error)
+    }
+  }
+
+  function unrefTrialId() {
+    return typeof trialId === 'object' && 'value' in trialId
+      ? trialId.value
+      : trialId
+  }
+
+  function stopGenerationFallback() {
+    if (generationFallbackTimer === null) return
+    window.clearInterval(generationFallbackTimer)
+    generationFallbackTimer = null
+  }
+
+  function syncGenerationFallback() {
+    const shouldPoll =
+      currentSnapshot.value?.generationStatus === 'GENERATING' &&
+      connection.value.status !== CONNECTION_STATUS.CONNECTED
+    if (!shouldPoll) {
+      stopGenerationFallback()
+      return
+    }
+    if (generationFallbackTimer !== null) return
+    generationFallbackTimer = window.setInterval(refreshGenerationFallback, 5_000)
+    refreshGenerationFallback()
+  }
+
+  watch(
+    [() => currentSnapshot.value?.generationStatus, () => connection.value.status],
+    syncGenerationFallback,
+    { immediate: true },
+  )
+  onBeforeUnmount(stopGenerationFallback)
 
   return {
     demoUserId,

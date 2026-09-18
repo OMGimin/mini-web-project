@@ -28,7 +28,9 @@ export async function saveGuideAnswers(trialId, side, payload) {
 }
 
 export async function createArgumentDraft(trialId, side) {
-  const response = await http.post(`/trials/${trialId}/parties/${side}/argument-draft`)
+  const response = await http.post(`/trials/${trialId}/parties/${side}/argument-draft`, undefined, {
+    timeout: 90_000,
+  })
   return unwrapApiResponse(response)
 }
 
@@ -69,5 +71,10 @@ export async function submitVote(trialId, selectedSide) {
 
 export async function getResults(trialId) {
   const response = await http.get(`/trials/${trialId}/results`)
+  return unwrapApiResponse(response)
+}
+
+export async function retryAiGeneration(trialId) {
+  const response = await http.post(`/trials/${trialId}/ai/retry`)
   return unwrapApiResponse(response)
 }

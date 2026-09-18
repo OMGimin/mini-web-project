@@ -1,5 +1,6 @@
 import { TRIAL_EVENT_TYPE } from "@/consts/trialEventType.js";
 import { TRIAL_STATUS } from "@/consts/trialStatus.js";
+import { getNextGenerationState, shouldApplyEventToSnapshot } from './trialGenerationState.js';
 
 function parsePayload(payload) {
   if (!payload) return {};
@@ -109,8 +110,7 @@ export function applyEventsToSnapshot(snapshot, events = []) {
   const snapshotSequence = Number(snapshot.latestEventSequence) || 0;
   return events
     .filter((event) => {
-      if (event.type === TRIAL_EVENT_TYPE.PRESENCE_UPDATED) return true;
-      return (Number(event.sequence) || 0) > snapshotSequence;
+      return shouldApplyEventToSnapshot(event, { latestEventSequence: snapshotSequence });
     })
     .reduce((current, event) => {
       const audienceCountFromEvent =
@@ -133,6 +133,7 @@ export function applyEventsToSnapshot(snapshot, events = []) {
       const status = votingOpened
         ? TRIAL_STATUS.VOTING
         : event.payload.status || current.status;
+      const generation = getNextGenerationState(current, event);
       const phaseEndsAt =
         event.payload.phaseEndsAt ??
         event.payload.voteEndsAt ??
@@ -153,6 +154,7 @@ export function applyEventsToSnapshot(snapshot, events = []) {
         ),
         voteOpen: votingOpened || status === TRIAL_STATUS.VOTING,
         ended: status === TRIAL_STATUS.ENDED,
+        ...generation,
       };
     }, snapshot);
 }
