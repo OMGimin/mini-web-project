@@ -18,11 +18,7 @@ defineProps({
     </header>
 
     <ol>
-      <li v-for="ground in grounds" :key="ground.title">
-        <div>
-          <strong>{{ ground.title }}</strong>
-          <span>{{ ground.side }}</span>
-        </div>
+      <li v-for="(ground, index) in grounds" :key="`${index}-${ground.description}`">
         <p>{{ ground.description }}</p>
       </li>
     </ol>

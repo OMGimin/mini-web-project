@@ -11,13 +11,13 @@ defineProps({
   <section class="fault-card" aria-labelledby="fault-ratio-title">
     <div class="card-copy">
       <span>AI 판결 결과</span>
-      <h2 id="fault-ratio-title">AI 판단 과실 비율</h2>
-      <p>양측의 진술과 변론 내용을 바탕으로 산정했습니다.</p>
+      <h2 id="fault-ratio-title">AI 책임 비율</h2>
+      <p>양측의 진술과 변론 내용을 바탕으로 산정한 AI 판단입니다.</p>
     </div>
 
     <div
       class="ratio-bar"
-      :aria-label="`A측 과실 ${ratio.sideA}퍼센트, B측 과실 ${ratio.sideB}퍼센트`"
+      :aria-label="`A측 책임 ${ratio.sideA}퍼센트, B측 책임 ${ratio.sideB}퍼센트`"
     >
       <span class="side-a" :style="{ width: `${ratio.sideA}%` }">
         A측 {{ ratio.sideA }}%

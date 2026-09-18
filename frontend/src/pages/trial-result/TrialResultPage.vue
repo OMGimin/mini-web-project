@@ -1,21 +1,27 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Check, Share2 } from '@lucide/vue'
-import { getResults, getTrial } from '@/apis/trialApi.js'
+import { getResults, getSnapshot, getTrial } from '@/apis/trialApi.js'
+import { TRIAL_STATUS } from '@/consts/trialStatus.js'
 import FaultRatioCard from '@/components/verdict/FaultRatioCard.vue'
 import JudgmentGrounds from '@/components/verdict/JudgmentGrounds.vue'
 import VerdictComparison from '@/components/verdict/VerdictComparison.vue'
 
 const shareCompleted = ref(false)
 const route = useRoute()
+const router = useRouter()
 const trialDetail = ref(null)
 const trialResult = ref(null)
 const resultPending = ref(true)
 const resultError = ref('')
 const caseTitle = computed(() => trialDetail.value?.title ?? '')
 const caseNumber = computed(() => `사건 #${route.params.trialId}`)
-const groundTitles = ['합의 기준', '갈등 확대 책임', '관계 회복 노력']
+const providerLabel = computed(() => {
+  if (trialResult.value?.aiProvider === 'mock') return '모의 응답'
+  if (trialResult.value?.aiProvider === 'langchain') return 'LangChain 연결 모드'
+  return ''
+})
 const aiResult = computed(() => {
   const verdict = trialResult.value?.verdict
   if (!verdict) return null
@@ -25,11 +31,7 @@ const aiResult = computed(() => {
     sideA: verdict.aFaultRatio,
     sideB: verdict.bFaultRatio,
     judgment: verdict.summary,
-    grounds: (verdict.grounds || []).map((description, index) => ({
-      title: groundTitles[index] || `주요 근거 ${index + 1}`,
-      side: '',
-      description,
-    })),
+    grounds: (verdict.grounds || []).map((description) => ({ description })),
     aRecommendation: verdict.aRecommendation,
     bRecommendation: verdict.bRecommendation,
   }
@@ -54,12 +56,21 @@ const juryResult = computed(() => {
 
 onMounted(async () => {
   try {
-    const [detail, result] = await Promise.all([
+    const [detail, snapshot] = await Promise.all([
       getTrial(route.params.trialId),
-      getResults(route.params.trialId),
+      getSnapshot(route.params.trialId),
     ])
     trialDetail.value = detail
-    trialResult.value = result
+    trialResult.value = { aiProvider: snapshot.aiProvider }
+    if (
+      snapshot.status !== TRIAL_STATUS.ENDED ||
+      ['GENERATING', 'FAILED'].includes(snapshot.generationStatus)
+    ) {
+      await router.replace({ name: 'live-trial', params: { trialId: route.params.trialId } })
+      return
+    }
+    const result = await getResults(route.params.trialId)
+    trialResult.value = { ...result, aiProvider: result.aiProvider ?? snapshot.aiProvider }
   } catch (error) {
     resultError.value = error?.message || '대중 투표 결과를 불러오지 못했습니다.'
   } finally {
@@ -90,12 +101,14 @@ async function shareResult() {
 <template>
   <div class="result-page">
     <main class="result-shell">
-      <section class="result-hero" aria-labelledby="result-title">
+      <section v-if="aiResult" class="result-hero" aria-labelledby="result-title">
         <span class="final-badge"><i aria-hidden="true"></i>최종 판결</span>
-        <p>AI 판사의 판결이 확정되었습니다</p>
+        <p>AI 판사의 책임 비율 판단이 확정되었습니다</p>
         <h1 id="result-title">{{ caseNumber }}</h1>
         <p class="case-title">“{{ caseTitle }}”</p>
-        <div v-if="aiResult" class="winner-badge"><Check :size="16" /> {{ aiResult.winnerSide }}측 승소</div>
+        <p v-if="providerLabel" class="provider-label">{{ providerLabel }}</p>
+        <div v-if="aiResult?.winnerSide" class="winner-badge"><Check :size="16" /> {{ aiResult.winnerSide }}측 승소</div>
+        <div v-else-if="aiResult" class="winner-badge winner-badge--neutral">승소 측을 정하지 않은 판단입니다</div>
       </section>
 
       <p v-if="resultPending" class="result-status" role="status">저장된 AI 판결과 대중 투표 결과를 불러오는 중입니다.</p>
@@ -203,12 +216,27 @@ async function shareResult() {
   font-size: 1.15rem;
 }
 
+.provider-label {
+  margin: 10px 0 0;
+  padding: 4px 10px;
+  border-radius: var(--ds-radius-full);
+  background: #eef2f7;
+  color: #52627a;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
 .winner-badge {
   margin-top: 14px;
   min-height: 30px;
   padding: 0 14px;
   background: #e8f7ed;
   color: #207443;
+}
+
+.winner-badge--neutral {
+  background: #eef2f7;
+  color: #52627a;
 }
 
 .judgment-grid {

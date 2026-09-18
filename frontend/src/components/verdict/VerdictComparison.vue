@@ -29,10 +29,10 @@ const resultsAgree = computed(() => {
       <article class="result-column">
         <h3><Scale :size="18" /> AI 판결</h3>
         <div class="ai-winner" role="status">
-          <span>승소 측</span>
-          <strong>{{ aiResult.winnerSide ? `${aiResult.winnerSide}측` : '미정' }}</strong>
+          <span>AI 책임 비율</span>
+          <strong>A {{ aiResult.sideA }}% · B {{ aiResult.sideB }}%</strong>
         </div>
-        <p class="ai-note">과실 비율은 위의 AI 판단 과실 비율 카드에서 확인할 수 있습니다.</p>
+        <p class="ai-note">{{ aiResult.winnerSide ? `${aiResult.winnerSide}측 승소 판단입니다.` : '승소 측을 정하지 않은 AI 판단입니다.' }}</p>
       </article>
 
       <article class="result-column jury-column">
