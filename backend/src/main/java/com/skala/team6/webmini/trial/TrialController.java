@@ -1,7 +1,10 @@
 package com.skala.team6.webmini.trial;
 
 import com.skala.team6.webmini.common.api.ApiResponse;
+import com.skala.team6.webmini.common.config.AppAiProperties;
+import com.skala.team6.webmini.common.config.TrialTimingProperties;
 import com.skala.team6.webmini.common.model.TrialSide;
+import com.skala.team6.webmini.common.model.TrialSpeaker;
 import com.skala.team6.webmini.common.model.TrialStatus;
 import com.skala.team6.webmini.demo.DemoUserContext;
 import com.skala.team6.webmini.demo.DemoUserId;
@@ -40,6 +43,9 @@ public class TrialController {
     private final TrialVoteService trialVoteService;
     private final TrialResultService trialResultService;
     private final TrialPresenceService trialPresenceService;
+    private final TrialGenerationService generationService;
+    private final AppAiProperties aiProperties;
+    private final TrialTimingProperties timings;
 
     public TrialController(
             TrialQueryService trialQueryService,
@@ -51,7 +57,10 @@ public class TrialController {
             TrialChatQueryService trialChatQueryService,
             TrialVoteService trialVoteService,
             TrialResultService trialResultService,
-            TrialPresenceService trialPresenceService
+            TrialPresenceService trialPresenceService,
+            TrialGenerationService generationService,
+            AppAiProperties aiProperties,
+            TrialTimingProperties timings
     ) {
         this.trialQueryService = trialQueryService;
         this.trialStatementService = trialStatementService;
@@ -63,6 +72,9 @@ public class TrialController {
         this.trialVoteService = trialVoteService;
         this.trialResultService = trialResultService;
         this.trialPresenceService = trialPresenceService;
+        this.generationService = generationService;
+        this.aiProperties = aiProperties;
+        this.timings = timings;
     }
 
     @Operation(summary = "재판 목록 조회")
@@ -164,7 +176,7 @@ public class TrialController {
                                 question.getSequenceNo(),
                                 question.getQuestion()
                         ))
-                        .toList()
+                        .toList(), aiProperties.provider()
         );
         return ResponseEntity.ok(ApiResponse.of(response));
     }
@@ -196,7 +208,7 @@ public class TrialController {
     ) {
         var statement = trialPreparationAiService.createArgumentDraft(trialId, side);
         return ResponseEntity.ok(ApiResponse.of(new ArgumentDraftResponse(
-                side, statement.getFactSummary(), statement.getArgumentText())));
+                side, statement.getFactSummary(), statement.getArgumentText(), aiProperties.provider())));
     }
 
     @Operation(summary = "변론문 초안 수정")
@@ -215,7 +227,7 @@ public class TrialController {
     ) {
         var statement = trialArgumentService.updateDraft(trialId, side, request);
         return ResponseEntity.ok(ApiResponse.of(new ArgumentDraftResponse(
-                side, statement.getFactSummary(), statement.getArgumentText())));
+                side, statement.getFactSummary(), statement.getArgumentText(), aiProperties.provider())));
     }
 
     @Operation(summary = "변론문 최종 확인")
@@ -263,7 +275,9 @@ public class TrialController {
                 0,
                 trialPresenceService.getAudienceCount(trialId),
                 false,
-                false)));
+                false,
+                aiProperties.provider(), "IDLE", null, null,
+                Math.toIntExact(timings.debateTurns()), null, null, false)));
     }
 
     @Operation(summary = "현재 상태 스냅샷 조회")
@@ -281,10 +295,48 @@ public class TrialController {
                 snapshot.latestEventSequence(),
                 snapshot.latestMessageSequence(),
                 trialPresenceService.getAudienceCount(trialId),
-                trial.getStatus() == TrialStatus.VOTING,
-                trial.getStatus() == TrialStatus.ENDED
+                trial.getStatus() == TrialStatus.VOTING
+                        && trial.getPhaseEndsAt() != null
+                        && trial.getPhaseEndsAt().isAfter(java.time.OffsetDateTime.now()),
+                trial.getStatus() == TrialStatus.ENDED,
+                aiProperties.provider(),
+                trial.getGenerationStatus(),
+                trial.getGenerationStage(),
+                generationTurn(trial, snapshot.publishedDebateTurns()),
+                Math.toIntExact(timings.debateTurns()),
+                nextSpeaker(trial, snapshot.publishedDebateTurns()),
+                "FAILED".equals(trial.getGenerationStatus())
+                        ? "AI 생성에 실패했습니다. 재판 생성자가 다시 시도할 수 있습니다." : null,
+                "FAILED".equals(trial.getGenerationStatus())
         );
         return ResponseEntity.ok(ApiResponse.of(response));
+    }
+
+    @Operation(summary = "실패한 AI 생성 재시도")
+    @PostMapping("/{trialId}/ai/retry")
+    public ResponseEntity<ApiResponse<TrialSnapshotResponse>> retryGeneration(
+            @PathVariable @Min(1) Long trialId,
+            @DemoUserId DemoUserContext demoUser
+    ) {
+        generationService.retry(trialId, demoUser.demoUserId());
+        return getSnapshot(trialId);
+    }
+
+    private Integer generationTurn(com.skala.team6.webmini.database.entity.TrialEntity trial,
+                                   long published) {
+        if (trial.getGenerationTurn() != null) { return trial.getGenerationTurn(); }
+        if (trial.getStatus() != TrialStatus.DEBATE || published >= timings.debateTurns()) { return null; }
+        return Math.toIntExact(published + 1);
+    }
+
+    private TrialSpeaker nextSpeaker(com.skala.team6.webmini.database.entity.TrialEntity trial,
+                                     long published) {
+        if (trial.getStatus() != TrialStatus.DEBATE || published >= timings.debateTurns()) { return null; }
+        TrialSide side = switch ((int) (published % 4)) {
+            case 0, 3 -> TrialSide.A;
+            default -> TrialSide.B;
+        };
+        return side == TrialSide.A ? TrialSpeaker.A_LAWYER : TrialSpeaker.B_LAWYER;
     }
 
     @Operation(summary = "재판 이벤트 조회")

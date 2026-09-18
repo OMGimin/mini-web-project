@@ -86,7 +86,8 @@ record StatementResponse(
 }
 
 record GuideQuestionsResponse(
-        List<GuideQuestionResponse> questions
+        List<GuideQuestionResponse> questions,
+        String aiProvider
 ) {
 }
 
@@ -121,7 +122,8 @@ record GuideAnswersResponse(
 record ArgumentDraftResponse(
         TrialSide side,
         String factSummary,
-        String argumentText
+        String argumentText,
+        String aiProvider
 ) {
 }
 
@@ -149,8 +151,24 @@ record TrialSnapshotResponse(
         long latestMessageSequence,
         int audienceCount,
         boolean voteOpen,
-        boolean ended
+        boolean ended,
+        String aiProvider,
+        String generationStatus,
+        String generationStage,
+        Integer generationTurn,
+        int totalDebateTurns,
+        TrialSpeaker nextSpeaker,
+        String generationError,
+        boolean retryable
 ) {
+    TrialSnapshotResponse(TrialStatus status, String phaseStartedAt, String phaseEndsAt,
+                          String scheduledEndAt, long latestEventSequence,
+                          long latestMessageSequence, int audienceCount,
+                          boolean voteOpen, boolean ended) {
+        this(status, phaseStartedAt, phaseEndsAt, scheduledEndAt,
+                latestEventSequence, latestMessageSequence, audienceCount,
+                voteOpen, ended, "mock", "IDLE", null, null, 4, null, null, false);
+    }
 }
 
 record TrialEventResponse(

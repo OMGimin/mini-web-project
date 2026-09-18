@@ -98,7 +98,9 @@ public class TrialQueryService {
         return new TrialSnapshot(
                 trial,
                 trialEventRepository.findLatestSequenceByTrialId(trialId),
-                chatMessageRepository.findLatestSequenceByTrialId(trialId)
+                chatMessageRepository.findLatestSequenceByTrialId(trialId),
+                trialEventRepository.countByTrialIdAndEventTypeIn(trialId,
+                        List.of("A_DEBATE", "B_DEBATE"))
         );
     }
 
@@ -151,7 +153,8 @@ public class TrialQueryService {
     public record TrialSnapshot(
             TrialEntity trial,
             long latestEventSequence,
-            long latestMessageSequence
+            long latestMessageSequence,
+            long publishedDebateTurns
     ) {
     }
 }
