@@ -95,9 +95,21 @@ Backend 검증:
 | `APP_CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | REST와 STOMP 허용 Origin |
 | `APP_DEMO_USER_HEADER_NAME` | `X-Demo-User-Id` | Demo 사용자 식별 Header |
 | `APP_WEBSOCKET_ENDPOINT` | `/ws` | STOMP Handshake Endpoint |
-| `APP_AI_PROVIDER` | `mock` | Mock AI Provider |
+| `APP_AI_PROVIDER` | `mock` | `mock` 또는 `langchain`; 실제 모드 실패 시 Mock으로 전환하지 않음 |
+| `APP_AI_BASE_URL` | `http://ai-service:8000` | LangChain AI 서비스 주소 |
+| `APP_AI_TIMEOUT_SECONDS` | `60` | AI HTTP 응답 대기 시간 |
+| `APP_TRIAL_DEBATE_TURNS` | `4` | 공방 발언 수: 공정한 순서를 위해 4 또는 8 |
+| `APP_TRIAL_DEBATE_INTERVAL_SECONDS` | `8` | 생성된 발언을 공개한 뒤 다음 발언까지 읽는 시간 |
 
 Spring Boot는 `.env` 파일을 자동으로 읽지 않습니다. 로컬 실행 시 Shell, IDE Run Configuration, Docker Compose 중 하나를 통해 환경변수로 전달합니다.
+
+## AI 공방과 복구 계약
+
+실제 AI 모드는 `/lawyer/questions`, `/lawyer/argument`, `/lawyer/debate`, `/judge/verdict`를 `APP_AI_BASE_URL`로 호출합니다. 공방 입력에는 양측 원진술과 확정 변론, 앞서 공개된 발언을 포함합니다. 기본 발언 순서는 A, B, B, A이며, 각 발언은 생성·검증·DB 저장 후에만 공개됩니다. 생성 중이거나 실패한 상태에서는 시간이 지나도 다음 발언, 투표, 판결로 넘어가지 않습니다. `scheduledEndAt`은 생성 시간을 제외한 예상 시각이며, 실제 진행 여부는 `status`와 `phaseEndsAt`을 따릅니다.
+
+`GET /api/v1/trials/{trialId}/snapshot`은 `aiProvider`, `generationStatus` (`IDLE`, `GENERATING`, `FAILED`), `generationStage`, `generationTurn`, `totalDebateTurns`, `nextSpeaker`, `generationError`, `retryable`을 제공합니다. `GENERATION_STARTED`와 `GENERATION_FAILED` 이벤트에는 단계·발언 번호·생성 상태를 담습니다. `A_DEBATE`/`B_DEBATE` 이벤트는 저장한 발언과 다음 공개 시각을 담습니다. 연결이 끊겼다면 스냅샷과 이벤트 순번으로 복구합니다.
+
+실패한 작업은 재판 생성자가 `X-Demo-User-Id` 헤더로 `POST /api/v1/trials/{trialId}/ai/retry`를 호출해 재시도합니다. 진행 중 요청 식별자를 DB에 기록하고, 재시작 후 오래된 요청은 실패로 전환합니다. 오래된 요청의 뒤늦은 응답은 저장하지 않습니다. 판결의 `aFaultRatio`와 `bFaultRatio`는 각각 0~100이고 합계는 100이며, `winnerSide`는 결론이 동률이거나 판정이 유보되면 `null`일 수 있습니다.
 
 ## STOMP 경로
 
