@@ -124,6 +124,11 @@ public class TrialStatementEntity {
         this.argumentText = argumentText;
     }
 
+    public void clearArgumentDraft() {
+        this.factSummary = null;
+        this.argumentText = null;
+    }
+
     public OffsetDateTime getConfirmedAt() {
         return confirmedAt;
     }
@@ -132,5 +137,9 @@ public class TrialStatementEntity {
         if (this.confirmedAt == null) {
             this.confirmedAt = confirmedAt;
         }
+    }
+
+    public void unconfirm() {
+        this.confirmedAt = null;
     }
 }

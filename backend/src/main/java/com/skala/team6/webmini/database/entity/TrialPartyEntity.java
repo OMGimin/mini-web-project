@@ -75,4 +75,8 @@ public class TrialPartyEntity {
     public void markReady() {
         this.ready = true;
     }
+
+    public void markNotReady() {
+        this.ready = false;
+    }
 }

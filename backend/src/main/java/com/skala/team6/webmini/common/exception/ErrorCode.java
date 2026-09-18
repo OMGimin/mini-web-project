@@ -14,6 +14,8 @@ public enum ErrorCode {
     GUIDE_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "안내 질문을 찾을 수 없습니다."),
     GUIDE_ANSWERS_INCOMPLETE(HttpStatus.CONFLICT, "모든 안내 질문 답변이 완료되지 않았습니다."),
     ARGUMENT_DRAFT_REQUIRED(HttpStatus.CONFLICT, "변론문 초안이 필요합니다."),
+    STATEMENT_ALREADY_CONFIRMED(HttpStatus.CONFLICT, "확인한 변론문은 수정할 수 없습니다."),
+    PREPARATION_CHANGED(HttpStatus.CONFLICT, "입력 내용이 변경되었습니다. AI 생성을 다시 요청해 주세요."),
     PARTIES_NOT_READY(HttpStatus.CONFLICT, "양측 준비가 완료되지 않았습니다."),
     TRIAL_ALREADY_STARTED(HttpStatus.CONFLICT, "이미 시작된 재판입니다."),
     CHAT_NOT_ALLOWED(HttpStatus.CONFLICT, "현재 채팅이 허용되지 않습니다."),
@@ -22,7 +24,10 @@ public enum ErrorCode {
     ALREADY_VOTED(HttpStatus.CONFLICT, "이미 투표했습니다."),
     TRIAL_ALREADY_ENDED(HttpStatus.CONFLICT, "이미 종료된 재판입니다."),
     RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "결과를 찾을 수 없습니다."),
-    MOCK_AI_RESPONSE_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "Mock AI 응답 검증에 실패했습니다.");
+    MOCK_AI_RESPONSE_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "Mock AI 응답 검증에 실패했습니다."),
+    AI_RESPONSE_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "AI 생성 결과를 확인할 수 없습니다. 다시 시도해 주세요."),
+    AI_RETRY_FORBIDDEN(HttpStatus.FORBIDDEN, "재판 생성자만 AI 생성을 다시 시도할 수 있습니다."),
+    AI_RETRY_NOT_ALLOWED(HttpStatus.CONFLICT, "재시도할 생성 작업이 없습니다.");
 
     private final HttpStatus status;
     private final String message;
