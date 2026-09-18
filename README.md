@@ -163,9 +163,25 @@ Justice & Empathy 디자인 시스템은 Frontend 시각 기준입니다.
 
 사전 준비: Docker와 Docker Compose 설치
 
-### 일반 실행
+### 실제 AI를 사용하는 실행
 
-루트 `compose.yaml`로 Frontend(Nginx), Backend(Spring Boot), PostgreSQL을 한 번에 빌드·실행합니다.
+실행할 터미널에 다음 환경변수를 설정합니다.
+
+- `OPENAI_API_KEY`: 발급받은 API 키
+- `OPENAI_MODEL`: 사용할 모델명
+- `APP_AI_PROVIDER=langchain`: Backend에서 실제 AI 서비스 사용
+
+프로젝트 루트에서 AI 서비스를 포함해 빌드·실행합니다.
+
+```bash
+docker compose --profile ai up -d --build
+```
+
+기본 접속 주소는 http://localhost:8081 입니다. 실제 키는 커밋하지 않습니다. 실제 모델 호출에는 비용이 발생하며, 실제 모델 및 Docker 전체 구동 검증 상태는 [검증 기록](docs/langchain-verification.md)을 참고하세요.
+
+### 기본 모의 실행
+
+AI 관련 환경변수를 설정하지 않은 기본 상태에서는 모의 응답을 사용합니다. 루트 `compose.yaml`로 Frontend(Nginx), Backend(Spring Boot), PostgreSQL을 한 번에 빌드·실행합니다.
 
 ```bash
 docker compose up -d --build

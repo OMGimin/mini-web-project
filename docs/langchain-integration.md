@@ -36,13 +36,13 @@ docker compose up -d --build
 
 실제 호출은 과금될 수 있으므로 이번 검증에서는 실행하지 않습니다. 추후 사용 모델과 비용 범위를 정한 후 적용합니다. 키를 소스나 채팅에 붙여넣지 않고 로컬 환경변수로 전달합니다.
 
-필요한 환경변수:
+실행할 터미널에 다음 환경변수를 설정합니다.
 
-- `APP_AI_PROVIDER=langchain`
-- `OPENAI_API_KEY`: 사용할 계정의 키
-- `OPENAI_MODEL`: 계정에서 사용 가능한 모델 이름, 명시 설정 필요
+- `OPENAI_API_KEY`: 발급받은 API 키
+- `OPENAI_MODEL`: 사용할 모델명, 명시 설정 필요
+- `APP_AI_PROVIDER=langchain`: Backend에서 실제 AI 서비스 사용
 
-위 환경변수를 설정한 터미널에서:
+프로젝트 루트에서 AI 서비스를 포함해 빌드·실행합니다.
 
 ```bash
 docker compose --profile ai up -d --build
