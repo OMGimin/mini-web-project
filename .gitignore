@@ -38,3 +38,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 logs/
+
+# Python AI service
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
