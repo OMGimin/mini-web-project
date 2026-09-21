@@ -161,105 +161,65 @@ Justice & Empathy 디자인 시스템은 Frontend 시각 기준입니다.
 
 ## 실행 방법
 
-사전 준비: Docker와 Docker Compose 설치
+실제 AI를 사용하는 **Docker Compose + GPT-5.6 Luna** 실행을 기준으로 합니다. Docker Desktop을 실행한 뒤, 터미널에서 이 저장소의 `compose.yaml`이 있는 폴더를 엽니다. Java·Node.js·Python은 호스트에 별도로 설치하지 않아도 되며, 최초 빌드에는 이미지와 의존성을 내려받기 위한 인터넷 연결이 필요합니다.
 
-### 실제 AI를 사용하는 실행
+### 1. API 키와 모델 설정
 
-실행할 터미널에 다음 환경변수를 설정합니다.
+아래 명령은 **macOS 기본 셸인 zsh 기준**입니다. 첫 줄을 실행하면 키 입력을 기다립니다. 발급받은 OpenAI API 키를 붙여넣고 Enter를 누르세요. 입력한 키는 화면에 표시되지 않으며, 키 값이 들어간 명령을 셸 기록에 남기지 않습니다.
 
-- `OPENAI_API_KEY`: 발급받은 API 키
-- `OPENAI_MODEL`: Compose 기본값은 `gpt-5.6-luna`. 기존 환경변수에 다른 모델이 설정돼 있으면 `export OPENAI_MODEL=gpt-5.6-luna`로 변경합니다.
-- `APP_AI_PROVIDER=langchain`: Backend에서 실제 AI 서비스 사용
+```zsh
+read -rs "OPENAI_API_KEY?OpenAI API 키 입력: "
+export OPENAI_API_KEY
+export OPENAI_MODEL=gpt-5.6-luna
+export APP_AI_PROVIDER=langchain
+```
 
-프로젝트 루트에서 AI 서비스를 포함해 빌드·실행합니다.
+키 입력 후 나머지 명령을 실행합니다. 키에 연결된 프로젝트의 사용 가능한 API 잔액과 모델 권한이 필요합니다. 실제 모델 호출은 과금됩니다. 키를 코드·문서·채팅에 붙여넣거나 커밋하지 않습니다.
+
+`OPENAI_MODEL`을 명시해 이전에 설정한 모델이 그대로 사용되는 것을 방지합니다. `APP_AI_PROVIDER=langchain`도 필요하며, 이 설정이 없으면 Backend는 기본 모의 응답을 사용합니다.
+
+### 2. 빌드하고 실행
+
+**환경변수를 설정한 같은 터미널**에서 실행합니다.
 
 ```bash
 docker compose --profile ai up -d --build
+docker compose --profile ai ps
 ```
 
-기본 접속 주소는 http://localhost:8081 입니다. 실제 키는 커밋하지 않습니다. 실제 모델 호출에는 비용이 발생하며, 실제 모델 및 Docker 전체 구동 검증 상태는 [검증 기록](docs/langchain-verification.md)을 참고하세요.
+`postgres`, `backend`, `frontend`, `ai-service` 네 서비스가 실행 중인지 확인한 뒤 **http://localhost:8081**에 접속합니다. 시작 직후에는 Backend 준비에 시간이 걸릴 수 있습니다.
 
-### 기본 모의 실행
+다음에 다시 실행할 때도 **1~2단계를 그대로 진행**하면 됩니다. 같은 터미널에 환경변수가 남아 있다면 키 재입력은 생략할 수 있지만, 새 터미널에서는 다시 설정해야 합니다. 코드나 모델 설정이 변경됐을 때도 위 실행 명령으로 반영합니다. 기존 화면을 열어둔 경우 브라우저를 새로고침하세요.
 
-AI 관련 환경변수를 설정하지 않은 기본 상태에서는 모의 응답을 사용합니다. 루트 `compose.yaml`로 Frontend(Nginx), Backend(Spring Boot), PostgreSQL을 한 번에 빌드·실행합니다.
+### 3. 새 사건으로 테스트
+
+글쓰기에서 제목·내용·관계 유형을 입력하고 재판 신청을 선택합니다. 재판 제목·사건 요약과 양측 이름을 확인한 뒤, 각 측의 **기본 질문 6개 → 변론문 생성 → 확인·확정**을 진행합니다. 현재 테스트 흐름에서는 AI 추가 질문을 생략합니다.
+
+마지막 확인 화면에서 재판을 시작하면 공방 4회와 투표를 거쳐 최종 결론·책임 비율이 생성됩니다. 기존 재판의 저장된 결과는 모델을 바꿔도 자동으로 다시 생성되지 않습니다.
+
+### 4. 사용 후 종료
 
 ```bash
-docker compose up -d --build
+docker compose --profile ai stop
 ```
 
-접속 주소:
+네 서비스를 중지하며 게시글·재판 등 DB 데이터는 보존합니다. 데이터 보존을 위해 볼륨 삭제 옵션인 `down -v`는 사용하지 마세요.
 
-```text
-http://localhost:8081
-```
+### 실행이 안 될 때
 
-종료:
+상태와 최근 로그를 확인합니다.
 
 ```bash
-docker compose down
+docker compose --profile ai ps --all
+docker compose --profile ai logs --tail=80 ai-service backend
 ```
 
-### 데모용 실행
+- Docker 연결 오류: Docker Desktop이 실행 중인지 확인합니다.
+- 인증·모델 권한·잔액 오류: 키가 연결된 OpenAI 프로젝트의 설정을 확인합니다.
+- 모의 응답 표시: `APP_AI_PROVIDER=langchain`을 설정한 같은 터미널에서 2단계 명령을 다시 실행합니다.
+- AI 응답 실패: 오류를 확인한 뒤 화면의 재시도 기능을 사용합니다. 재시도도 비용이 발생할 수 있습니다.
 
-데모용 실행도 같은 Docker Compose를 사용합니다. 차이는 실행 명령이 아니라 접속 주소입니다. 발표자 PC에서 Compose를 실행한 뒤, 같은 네트워크의 팀원이나 시연 기기는 발표자 PC의 LAN IP로 접속합니다.
-
-```bash
-docker compose up -d --build
-```
-
-발표자 PC의 LAN IP 확인(macOS 예시):
-
-```bash
-ipconfig getifaddr en0
-```
-
-Mac의 네트워크 인터페이스는 환경에 따라 `en0`이 아닐 수 있습니다. 값이 나오지 않으면 `en1`을 확인하거나 `networksetup -listallhardwareports`로 Wi-Fi 장치명을 먼저 확인합니다.
-
-```bash
-ipconfig getifaddr en1
-networksetup -listallhardwareports
-```
-
-데모 접속 주소:
-
-```text
-http://<HOST_LAN_IP>:8081
-```
-
-예시:
-
-```text
-http://192.168.0.15:8081
-```
-
-루트 Compose 실행에서는 Frontend가 호스트의 `8081`로 매핑되고, Nginx가 `/api`와 `/ws` 요청을 내부 Backend Service로 프록시합니다. `compose.yaml`의 Backend CORS는 로컬 LAN 데모 접속을 위해 모든 Origin을 허용하도록 설정되어 있습니다.
-
-운영 또는 외부 배포 환경에서는 `APP_CORS_ALLOWED_ORIGINS=*`를 절대 사용하지 않습니다. 배포 환경에서는 실제 Frontend Origin만 명시적으로 허용해야 합니다.
-
-종료:
-
-```bash
-docker compose down
-```
-
-주의사항:
-
-- 같은 Wi-Fi여도 회사/학교 네트워크의 클라이언트 분리 또는 방화벽 설정에 따라 접속이 차단될 수 있습니다.
-- `8081` Port가 이미 사용 중이면 `FRONTEND_PORT` 환경변수로 호스트 Port를 바꿔 실행합니다.
-
-```bash
-FRONTEND_PORT=8082 docker compose up -d --build
-```
-
-환경변수와 STOMP 상세는 [frontend/README.md](frontend/README.md), [backend/README.md](backend/README.md)를 따릅니다. 실제 비밀값은 Repository에 Commit하지 않습니다.
-
-기본 검증:
-
-```bash
-(cd frontend && npm run lint)
-(cd frontend && npm run build)
-(cd backend && ./gradlew check)
-```
+현재 구성은 로컬 테스트용입니다. 외부 배포 시에는 별도의 인증·네트워크 설정 검토가 필요합니다. 내부 연결 구조는 [LangChain 연결 가이드](docs/langchain-integration.md), 이전 검증 범위는 [검증 기록](docs/langchain-verification.md)을 참고하세요. 2026년 9월 21일 GPT-5.6 Luna의 실제 API 연결과 가상 사건 2건의 전체 흐름을 확인했습니다. FastAPI 생성 요청 14회(변론 4회·공방 8회·최종 의견 2회)가 모두 성공했고, 사건별 책임 비율은 45:55와 10:90으로 달라졌으며 각 사건에 따른 판단 근거와 개선 의견이 출력됐습니다. 각 사례를 1회씩 실행한 결과이므로, 반복 실행 시 일관성과 편향은 추가 검증이 필요합니다.
 
 ## 협업 흐름
 
