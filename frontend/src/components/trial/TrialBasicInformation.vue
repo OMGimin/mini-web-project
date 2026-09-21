@@ -10,6 +10,7 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  postLocked: { type: Boolean, default: false },
   locked: {
     type: Boolean,
     default: false,
@@ -32,7 +33,7 @@ defineEmits(["update:modelValue", "next"]);
           class="rounded-lg border border-input bg-muted px-4 py-3 outline-none focus:ring-2 focus:ring-ring"
           maxlength="150"
           placeholder="재판 제목을 입력해주세요"
-          readonly
+          :readonly="locked || postLocked"
           @input="
             $emit('update:modelValue', {
               ...modelValue,
@@ -40,6 +41,18 @@ defineEmits(["update:modelValue", "next"]);
             })
           "
         />
+      </label>
+
+      <label v-if="!locked && !postLocked" class="grid gap-2 text-sm font-medium">
+        관계 유형
+        <select :value="modelValue.relationshipType" required
+          class="rounded-lg border border-input bg-muted px-4 py-3"
+          @change="$emit('update:modelValue', { ...modelValue, relationshipType: $event.target.value })">
+          <option value="" disabled>관계 유형을 선택하세요</option>
+          <option value="COUPLE">연인</option>
+          <option value="SOME">썸</option>
+          <option value="SPOUSE">부부</option>
+        </select>
       </label>
 
       <div class="grid gap-4 sm:grid-cols-2">
@@ -84,7 +97,7 @@ defineEmits(["update:modelValue", "next"]);
           class="min-h-32 resize-none rounded-lg border border-input bg-muted px-4 py-3 outline-none focus:ring-2 focus:ring-ring"
           maxlength="1000"
           placeholder="두 사람 사이에 있었던 갈등을 설명해주세요"
-          readonly
+          :readonly="locked || postLocked"
           @input="
             $emit('update:modelValue', {
               ...modelValue,
@@ -124,7 +137,7 @@ defineEmits(["update:modelValue", "next"]);
         class="flex gap-3 rounded-lg bg-[var(--ds-color-primary-fixed)] p-4 text-sm text-[var(--ds-color-on-primary-fixed-variant)]"
       >
         <Info class="mt-0.5 size-5 shrink-0 text-primary" />
-        양측의 진술 확인이 끝나면 공개 Live 재판이 즉시 시작됩니다.
+        양측 진술을 확정한 뒤 마지막 확인 화면에서 재판을 시작할 수 있습니다.
       </div>
     </div>
 
@@ -135,7 +148,8 @@ defineEmits(["update:modelValue", "next"]);
         !modelValue.title.trim() ||
         !modelValue.aDisplayName.trim() ||
         !modelValue.bDisplayName.trim() ||
-        !modelValue.summary.trim()
+        !modelValue.summary.trim() ||
+        (!locked && !postLocked && !modelValue.relationshipType)
       "
       type="submit"
     >
