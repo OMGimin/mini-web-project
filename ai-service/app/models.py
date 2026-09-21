@@ -115,6 +115,7 @@ class VerdictRequest(ContractModel):
         return self
 
 
+# API로 반환하기 전에 책임 비율과 근거의 최소 형식을 검증한다. 승자는 없어도 된다.
 class VerdictResponse(ContractModel):
     winnerSide: Side | None
     aFaultRatio: int = Field(ge=0, le=100)
@@ -127,6 +128,7 @@ class VerdictResponse(ContractModel):
 
     @model_validator(mode="after")
     def validate_ratios(self):
+        # 60:40 같은 고정값을 넣지 않고 모델이 생성한 비율의 합계만 검사한다.
         if self.aFaultRatio + self.bFaultRatio != 100:
             raise ValueError("fault ratios must total 100")
         if len(self.summary.strip()) < 30 or any(len(ground.strip()) < 20 for ground in self.grounds):
@@ -150,6 +152,7 @@ class DebateGeneration(BaseModel):
     content: str
 
 
+# 모델에 전달할 출력 스키마다. 생성 후 VerdictResponse에서 합계·문장 길이를 추가 검사한다.
 class VerdictGeneration(BaseModel):
     """A balanced relationship-conflict opinion based on the complete record."""
     winnerSide: Side | None = Field(description="A, B, or null for no clear winner")

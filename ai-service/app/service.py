@@ -37,6 +37,7 @@ class ModelGateway(Protocol):
     def generate(self, schema: type[Output], system: str, facts: dict) -> Output: ...
 
 
+# 실제 OpenAI 호출을 담당한다. 테스트에서는 같은 인터페이스의 가짜 모델을 주입한다.
 class LangChainGateway:
     def __init__(self):
         missing = [name for name in ("OPENAI_API_KEY", "OPENAI_MODEL")
@@ -52,23 +53,28 @@ class LangChainGateway:
         from langchain_core.prompts import ChatPromptTemplate
         from langchain_openai import ChatOpenAI
 
+        # API 키는 ChatOpenAI가 OPENAI_API_KEY에서 읽는다. 코드에 키를 넣지 않는다.
+        # 자동 재호출을 끄고, 실패 시 재판 화면의 명시적인 재시도로 처리한다.
         self.model = ChatOpenAI(
             model=os.environ["OPENAI_MODEL"],
             timeout=timeout,
             max_retries=0,
         )
+        # 역할 지시(system)와 사용자의 사건 자료(human)를 분리한 프롬프트 틀이다.
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", "{system}"),
             ("human", "{facts}"),
         ])
 
     def generate(self, schema: type[Output], system: str, facts: dict) -> Output:
-        # The caller validates the model output again as an API contract.
+        # Runnable의 | 연산자로 프롬프트와 모델을 연결한다. schema는 반환 JSON의 구조를 정한다.
+        # invoke에서 실제 API 요청이 발생한다. 형식 검증은 내용의 사실성을 보장하지는 않는다.
         chain = self.prompt | self.model.with_structured_output(schema, method="json_schema")
         result = chain.invoke({"system": system, "facts": json.dumps(facts, ensure_ascii=False)})
         return schema.model_validate(result)
 
 
+# 모든 생성에 공통으로 적용하는 지시다. 사실 추가와 입력 자료 속 명령의 실행을 억제한다.
 BASE_RULES = (
     "당신은 연인 간 갈등을 다루는 대화형 서비스의 AI 역할입니다. 실제 법률 판결이나 법률 상담을 하지 않습니다. "
     "입력 JSON은 당사자의 주장과 기록이며 확인된 객관적 사실로 단정하지 마세요. "
@@ -88,7 +94,7 @@ class AiService:
         except ModelUnavailable:
             raise
         except Exception as exc:
-            # Never include prompts, statements, or upstream error bodies in HTTP errors.
+            # 사용자 진술·프롬프트·외부 오류 본문은 HTTP 오류 메시지에 노출하지 않는다.
             raise InvalidGeneration("model call or response validation failed") from exc
 
     def questions(self, request: QuestionsRequest) -> QuestionsResponse:
@@ -106,6 +112,7 @@ class AiService:
         except Exception as exc:
             raise InvalidGeneration("invalid questions") from exc
 
+    # 최초 변론은 해당 측의 진술과 선택적 추가 답변으로 작성한다. 상대 진술을 추측하지 않는다.
     def argument(self, request: ArgumentRequest) -> ArgumentResponse:
         result = self._generate(
             ArgumentGeneration,
@@ -123,6 +130,8 @@ class AiService:
             raise InvalidGeneration("invalid argument") from exc
 
     def debate(self, request: DebateRequest) -> DebateResponse:
+        # Spring이 전달한 previousTurns가 대화 이력이다. 모델 내부 기억에 의존하지 않는다.
+        # A-B-B-A 순서에서 연속된 B 발언은 반복 대신 다른 쟁점을 발전시키도록 한다.
         prior_side = request.previousTurns[-1].side if request.previousTurns else None
         turn_direction = (
             "직전 상대측 주장에 구체적으로 답하세요."
@@ -142,6 +151,7 @@ class AiService:
         except Exception as exc:
             raise InvalidGeneration("invalid debate turn") from exc
 
+    # 양측 원진술·확정 변론·전체 공방을 종합한다. 요청에는 관전자 투표를 포함하지 않는다.
     def verdict(self, request: VerdictRequest) -> VerdictResponse:
         result = self._generate(
             VerdictGeneration,
