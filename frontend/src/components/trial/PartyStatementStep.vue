@@ -36,7 +36,8 @@ const actionDisabled = computed(() =>
 )
 const actionLabel = computed(() => {
   if (props.party.pending) return '처리 중...'
-  return props.party.draftGenerated ? '변론문 생성 완료' : '진술서 작성 완료'
+  if (props.party.draftGenerated) return '변론문 생성 완료'
+  return '변론문 생성'
 })
 const providerLabel = computed(() => {
   if (props.party.aiProvider === 'mock') return '모의 응답'
@@ -58,18 +59,9 @@ function sendMessage() {
   if (!content || inputDisabled.value) return
 
   const messages = [...props.party.messages, { id: createUuid(), role: 'USER', content }]
-  let nextQuestion
-
-  const answeredCount = messages.filter((message) => message.role === 'USER').length
-  nextQuestion = statementFields[answeredCount]?.question
-
-  messages.push({
-    id: createUuid(),
-    role: 'ASSISTANT',
-    content:
-      nextQuestion ??
-      '진술 내용을 모두 확인했습니다. 아래 버튼을 눌러 변론문 초안을 작성해드릴게요.',
-  })
+  const nextQuestion = statementFields[statementMessages.value.length + 1]?.question
+  messages.push({ id: createUuid(), role: 'ASSISTANT', content: nextQuestion ??
+    '기본 진술을 확인했습니다. 아래 버튼을 눌러 변론문을 생성해주세요.' })
 
   chatInput.value = ''
   updateParty({ messages, draftGenerated: false })
@@ -101,7 +93,7 @@ function advancePreparation() {
           <span class="grid size-10 place-items-center rounded-full bg-[var(--ds-color-primary-fixed)] text-primary"><Bot class="size-5" /></span>
           <div>
             <h2 class="font-heading font-semibold">{{ side }}측 AI 변호사</h2>
-            <p class="text-xs text-muted-foreground">대화를 통해 진술을 정리해드려요</p>
+            <p class="text-xs text-muted-foreground">기본 질문 6개에 답하면 AI가 변론문을 작성합니다</p>
           </div>
         </div>
 
@@ -181,10 +173,10 @@ function advancePreparation() {
       <div v-else class="mt-4 grid min-h-[31rem] place-items-center rounded-lg border border-dashed border-border bg-muted p-8 text-center text-sm text-muted-foreground">
         <div>
           <Sparkles class="mx-auto mb-3 size-7 text-primary" />
-          AI 변호사와 대화를 마친 뒤<br />‘진술서 작성 완료’를 눌러주세요.
+          AI 변호사와 대화를 마친 뒤<br />‘변론문 생성’을 눌러주세요.
         </div>
       </div>
-      <p class="mt-3 text-center text-xs text-muted-foreground">대화 완료 후 {{ providerLabel }}가 사건 개요와 핵심 진술을 요약합니다.</p>
+      <p class="mt-3 text-center text-xs text-muted-foreground">생성 방식: {{ providerLabel }} · 입력한 진술을 바탕으로 요약합니다.</p>
     </section>
 
     <div class="flex justify-between border-t border-border pt-4 lg:col-span-2">
