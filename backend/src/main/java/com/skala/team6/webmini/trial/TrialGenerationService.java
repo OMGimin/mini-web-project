@@ -73,6 +73,7 @@ public class TrialGenerationService {
         this.mapper = mapper;
     }
 
+    // DB 잠금 안에서는 생성 작업만 선점하고, 느린 외부 API 호출은 별도 실행기로 넘긴다.
     public void tick(Long trialId, OffsetDateTime now) {
         Work work = transactions.execute(status -> claim(trialId, now));
         if (work == null) { return; }
@@ -104,6 +105,7 @@ public class TrialGenerationService {
         TrialEntity trial = trials.findByIdForUpdate(trialId).orElse(null);
         if (trial == null || (trial.getStatus() != TrialStatus.DEBATE
                 && trial.getStatus() != TrialStatus.VOTING)) { return null; }
+        // 실패한 단계는 사용자 재시도까지 멈추고, 생성 중인 단계는 타이머가 지나도 건너뛰지 않는다.
         if ("FAILED".equals(trial.getGenerationStatus())) { return null; }
         if ("GENERATING".equals(trial.getGenerationStatus())) {
             if (trial.getGenerationStartedAt() != null
@@ -113,6 +115,7 @@ public class TrialGenerationService {
             return null;
         }
         if (trial.getPhaseEndsAt() == null || trial.getPhaseEndsAt().isAfter(now)) { return null; }
+        // 저장된 공방을 순서대로 복원해 다음 발언과 최종 결론의 입력으로 전달한다.
         List<TrialEventEntity> priorEvents = events.findByTrialIdOrderBySequenceNoAsc(trialId);
         List<LawyerAiService.DebateTurn> turns = new ArrayList<>();
         for (TrialEventEntity event : priorEvents) {
@@ -146,6 +149,7 @@ public class TrialGenerationService {
                     statement.getAfterConversation(), statement.getDesiredResolution()));
             arguments.put(party.getSide(), statement.getArgumentText());
         }
+        // 재시도 전후 요청을 구별해 이전 요청의 늦은 응답이 최신 결과를 덮어쓰지 못하게 한다.
         String requestId = UUID.randomUUID().toString();
         trial.beginGeneration(stage, turn, requestId, now);
         Map<String, Object> payload = new java.util.HashMap<>();
@@ -166,6 +170,7 @@ public class TrialGenerationService {
                     "DEBATE".equals(work.stage()) ? TrialStatus.DEBATE : TrialStatus.VOTING) != null);
             if (!Boolean.TRUE.equals(active)) { return; }
             if ("DEBATE".equals(work.stage())) {
+                // 이 호출은 DB 트랜잭션 밖이다. 응답이 온 뒤 별도 트랜잭션으로 저장한다.
                 String content = lawyer.createDebateTurn(work.trialId(), work.turn(),
                         Math.toIntExact(timings.debateTurns()), work.side(), work.postContent(),
                         work.statements(), work.arguments(), work.turns());
@@ -187,6 +192,7 @@ public class TrialGenerationService {
         if (trial == null) { return; }
         long saved = eventWriter.countByTrialAndTypes(work.trialId(), "A_DEBATE", "B_DEBATE");
         if (saved != work.turn() - 1) { return; }
+        // 생성이 끝난 시점부터 읽기 시간을 부여하므로 API 응답 지연이 읽기 시간을 소비하지 않는다.
         OffsetDateTime next = now.plusSeconds(timings.debateIntervalSeconds());
         trial.extendPhaseTo(next);
         trial.scheduleEnd(next.plusSeconds((timings.debateTurns() - work.turn())
@@ -202,6 +208,7 @@ public class TrialGenerationService {
     private void publishVerdict(Work work, JudgeAiService.Verdict result, OffsetDateTime now) {
         TrialEntity trial = matching(work, TrialStatus.VOTING);
         if (trial == null || verdicts.findByTrialId(work.trialId()).isPresent()) { return; }
+        // 검증된 비율·근거·권고를 저장한 뒤 결과 공개 이벤트를 생성한다.
         VerdictEntity verdict = verdicts.saveAndFlush(new VerdictEntity(trial, result.winnerSide(),
                 result.aFaultRatio(), result.bFaultRatio(), result.summary(),
                 mapper.writeValueAsString(result.grounds()), result.aRecommendation(),
@@ -223,6 +230,7 @@ public class TrialGenerationService {
         eventWriter.save(trial, "VERDICT_ANNOUNCED", TrialSpeaker.JUDGE, result.summary(), payload);
     }
 
+    // 현재 단계·요청 ID·생성 상태가 모두 일치하는 응답만 반영한다.
     private TrialEntity matching(Work work, TrialStatus status) {
         TrialEntity trial = trials.findByIdForUpdate(work.trialId()).orElse(null);
         return trial != null && trial.getStatus() == status

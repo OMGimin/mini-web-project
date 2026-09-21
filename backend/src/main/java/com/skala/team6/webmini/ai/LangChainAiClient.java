@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 import java.time.Duration;
 
+// langchain 모드에서만 선택되는 어댑터다. Spring은 Python 서비스에 요청하고 Python이 LLM을 호출한다.
 @Component
 @ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "langchain")
 public class LangChainAiClient implements AiClient {
@@ -44,6 +45,7 @@ public class LangChainAiClient implements AiClient {
         return post("/judge/verdict", request, JudgeVerdictResponse.class);
     }
 
+    // Java 요청 객체를 JSON으로 전송하고, 구조화된 응답을 지정한 DTO로 읽는다.
     private <T> T post(String path, Object body, Class<T> responseType) {
         return client.post().uri(path).body(body).retrieve().body(responseType);
     }

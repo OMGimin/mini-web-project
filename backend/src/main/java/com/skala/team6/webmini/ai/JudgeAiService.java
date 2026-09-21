@@ -61,6 +61,7 @@ public class JudgeAiService {
                 ? ErrorCode.MOCK_AI_RESPONSE_INVALID : ErrorCode.AI_RESPONSE_INVALID);
     }
 
+    // Python 검증과 별개로 DB 저장 전 계약을 다시 검사한다. 근거의 사실성 평가는 별도로 필요하다.
     private boolean isValid(JudgeVerdictResponse response) {
         return response != null
                 && "1.0".equals(response.schemaVersion())
