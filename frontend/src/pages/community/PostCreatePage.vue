@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { Bold, Image, Italic, Link, Scale } from "@lucide/vue";
 
@@ -44,6 +44,14 @@ async function submitPost() {
   submitError.value = "";
 
   try {
+    if (requestTrial.value) {
+      sessionStorage.setItem(TRIAL_DRAFT_STORAGE_KEY, JSON.stringify({
+        title: title.value.trim(), content: content.value.trim(),
+        relationshipType: relationshipType.value, category: category.value,
+      }));
+      await router.push({ name: "trial-preparation" });
+      return;
+    }
     const createdPost = await createPost({
       title: title.value.trim(),
       content: content.value.trim(),
@@ -68,21 +76,6 @@ async function submitPost() {
       return;
     }
 
-    sessionStorage.setItem(
-      TRIAL_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        postId: createdPost.postId,
-        title: createdPost.title,
-        content: createdPost.content,
-        relationshipType: createdPost.relationshipType,
-        category: category.value,
-      }),
-    );
-
-    await router.push({
-      name: "trial-preparation",
-      query: { postId: createdPost.postId },
-    });
   } catch (error) {
     submitError.value =
       error?.message ||
@@ -92,15 +85,6 @@ async function submitPost() {
   }
 }
 
-// Prefill form for quick demo
-onMounted(() => {
-  // Demo defaults matching user's scenario
-  category.value = "이성친구";
-  relationshipType.value = "COUPLE";
-  title.value = "내 친구의 여우짓을 남자친구가 거절을 안해";
-  content.value = `며칠 전에 나, 남자친구, 내 친구랑 같이 술자리를 가졌었는데 친구가 한 번씩 "오빠가 아깝다~" 그러더라고 그러면서 자꾸 배배꼬기도 하고\n남자친구는 그 자리에서는 그냥 허허 웃기만 하더라고\n내 친구가 살짝 선 넘은 것 같아서 남자친구한테 뒷담화 하듯이 "쟤 자꾸 왜 저래" 라고 이야기했더니 "에이 그냥 한 소리지" 하면서 넘어가더라고\n내 남자친구가 확실하게 선을 못긋는 것 같아서 불편한데 이거 나만 이렇게 생각해?`;
-  requestTrial.value = true;
-});
 </script>
 
 <template>
@@ -189,8 +173,8 @@ onMounted(() => {
         <span class="grid gap-1 text-sm"
           ><strong>재판 신청 (Request Trial)</strong
           ><small class="leading-5 text-muted-foreground"
-            >게시글 등록과 동시에 AI 재판을 신청하시겠습니까? 신청 시 AI
-            변호사와 함께 재판을 준비하게 됩니다.</small
+            >재판 기본 정보를 확인한 뒤 게시글과 재판을 등록합니다. 이후 AI
+            변호사와 함께 양측 진술을 준비합니다.</small
           ></span
         >
         <input
@@ -215,7 +199,7 @@ onMounted(() => {
           :disabled="!canSubmit || submitPending"
           @click="submitPost"
         >
-          {{ submitPending ? "등록 중..." : "등록하기" }}</Button
+          {{ submitPending ? "처리 중..." : requestTrial ? "재판 정보 입력" : "등록하기" }}</Button
         >
       </div>
     </section>
