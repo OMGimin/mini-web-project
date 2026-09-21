@@ -18,7 +18,7 @@ export async function saveStatement(trialId, side, payload) {
 }
 
 export async function createGuideQuestions(trialId, side) {
-  const response = await http.post(`/trials/${trialId}/parties/${side}/guide-questions`)
+  const response = await http.post(`/trials/${trialId}/parties/${side}/guide-questions`, undefined, { timeout: 90_000 })
   return unwrapApiResponse(response)
 }
 
