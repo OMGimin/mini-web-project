@@ -168,7 +168,7 @@ Justice & Empathy 디자인 시스템은 Frontend 시각 기준입니다.
 실행할 터미널에 다음 환경변수를 설정합니다.
 
 - `OPENAI_API_KEY`: 발급받은 API 키
-- `OPENAI_MODEL`: 사용할 모델명
+- `OPENAI_MODEL`: Compose 기본값은 `gpt-5.6-luna`. 기존 환경변수에 다른 모델이 설정돼 있으면 `export OPENAI_MODEL=gpt-5.6-luna`로 변경합니다.
 - `APP_AI_PROVIDER=langchain`: Backend에서 실제 AI 서비스 사용
 
 프로젝트 루트에서 AI 서비스를 포함해 빌드·실행합니다.

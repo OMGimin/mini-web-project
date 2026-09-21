@@ -39,7 +39,7 @@ docker compose up -d --build
 실행할 터미널에 다음 환경변수를 설정합니다.
 
 - `OPENAI_API_KEY`: 발급받은 API 키
-- `OPENAI_MODEL`: 사용할 모델명, 명시 설정 필요
+- `OPENAI_MODEL`: Compose 기본값은 `gpt-5.6-luna`. 기존 환경변수에 다른 모델이 설정돼 있으면 `export OPENAI_MODEL=gpt-5.6-luna`로 변경합니다.
 - `APP_AI_PROVIDER=langchain`: Backend에서 실제 AI 서비스 사용
 
 프로젝트 루트에서 AI 서비스를 포함해 빌드·실행합니다.
